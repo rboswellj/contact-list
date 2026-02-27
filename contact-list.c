@@ -40,7 +40,7 @@ void stripNonDigits(char *phone);
 // file operations
 void saveContactsToFile(Contact contacts[], int count, const char *filename);
 void loadContactsFromFile(Contact contacts[], int *count, const char *filename);
-void createFileIfNotExists(const char *filename);
+void createFile(const char *filename);
 
 int main() {
     Contact contacts[100]; // Array to hold up to 100 contacts
@@ -123,7 +123,7 @@ void addContact(Contact contacts[], int *count) {
             clearInputBuffer();
         }
         trimNewline(contacts[*count].email);
-        if (validateEmail(contacts[*count-1].email)) {
+        if (validateEmail(contacts[*count].email)) {
             break;
         }
         printf("Invalid email format. Please try again.\n");
@@ -353,7 +353,7 @@ void saveContactsToFile(Contact contacts[], int count, const char *filename) {
 void loadContactsFromFile(Contact contacts[], int *count, const char *filename) {
     FILE *file = fopen(filename, "r");
     if (file == NULL) {
-        createFileIfNotExists(filename);
+        createFile(filename);
         file = fopen(filename, "r");
         if (file == NULL) {
             printf("Error creating file.\n");
@@ -382,7 +382,7 @@ void loadContactsFromFile(Contact contacts[], int *count, const char *filename) 
 }
 
 // Function to create a file if it does not exist
-void createFileIfNotExists(const char *filename) {
+void createFile(const char *filename) {
     FILE *file = fopen(filename, "r");
     if (file == NULL) {
         file = fopen(filename, "w");
