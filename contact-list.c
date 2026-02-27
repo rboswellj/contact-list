@@ -23,6 +23,7 @@ typedef struct {
 void addContact(Contact contacts[], int *count);
 void displayContacts(Contact contacts[], int count);
 void searchContact(Contact contacts[], int count);
+int findMatchingContacts(Contact contacts[], int count, const char *query, int matchIndexes[], int maxMatches);
 void toLowerCase(char *str);
 void trimNewline(char *str);
 void printContact(Contact contact);
@@ -146,28 +147,48 @@ void displayContacts(Contact contacts[], int count) {
 // Function to search for a contact by name
 void searchContact(Contact contacts[], int count) {
     char searchName[50];
+    int matchIndexes[100];
     printf("Enter name to search: ");
     fgets(searchName, sizeof(searchName), stdin);
     if (strchr(searchName, '\n') == NULL) {
         clearInputBuffer();
     }
     trimNewline(searchName);
-    toLowerCase(searchName);
-    int found = 0;
-    for (int i = 0; i < count; i++) {
-        char lowerName[50];
-        strcpy(lowerName, contacts[i].name);
-        toLowerCase(lowerName);
-        if (strstr(lowerName, searchName) != NULL) {
-            printContact(contacts[i]);
-            found = 1;
-            break;
+    int matchCount = findMatchingContacts(contacts, count, searchName, matchIndexes, 100);
+
+    if (matchCount > 0) {
+        printf("Found %d match(es):\n", matchCount);
+        for (int i = 0; i < matchCount && i < 100; i++) {
+            printContact(contacts[matchIndexes[i]]);
         }
-    }
-    if (!found) {
+    } else {
         printf("Contact not found.\n");
     }
 }  
+
+// Shared helper for case-insensitive name contains matching
+int findMatchingContacts(Contact contacts[], int count, const char *query, int matchIndexes[], int maxMatches) {
+    char searchName[50];
+    strncpy(searchName, query, sizeof(searchName) - 1);
+    searchName[sizeof(searchName) - 1] = '\0';
+    toLowerCase(searchName);
+
+    int matchCount = 0;
+    for (int i = 0; i < count; i++) {
+        char lowerName[50];
+        strncpy(lowerName, contacts[i].name, sizeof(lowerName) - 1);
+        lowerName[sizeof(lowerName) - 1] = '\0';
+        toLowerCase(lowerName);
+
+        if (strstr(lowerName, searchName) != NULL) {
+            if (matchCount < maxMatches) {
+                matchIndexes[matchCount] = i;
+            }
+            matchCount++;
+        }
+    }
+    return matchCount;
+}
 
 // Function to convert a string to lowercase
 void toLowerCase(char *str) {
@@ -232,16 +253,7 @@ void deleteContact(Contact contacts[], int *count) {
         clearInputBuffer();
     }
     trimNewline(searchName);
-    toLowerCase(searchName);
-
-    for (int i = 0; i < *count; i++) {
-        char lowerName[50];
-        strcpy(lowerName, contacts[i].name);
-        toLowerCase(lowerName);
-        if (strstr(lowerName, searchName) != NULL) {
-            matchIndexes[matchCount++] = i;
-        }
-    }
+    matchCount = findMatchingContacts(contacts, *count, searchName, matchIndexes, 100);
 
     if (matchCount == 0) {
         printf("Contact not found. No deletion performed.\n");
@@ -259,21 +271,9 @@ void deleteContact(Contact contacts[], int *count) {
         printContact(contacts[matchIndexes[i]]);
     }
 
-    char selectionInput[20];
-    int selection = 0;
-    printf("Enter the number of the contact to delete (1-%d): ", matchCount);
-    fgets(selectionInput, sizeof(selectionInput), stdin);
-    if (strchr(selectionInput, '\n') == NULL) {
-        clearInputBuffer();
-    }
-    selection = atoi(selectionInput);
+    printf("Please enter a more specific name.\n");
 
-    if (selection < 1 || selection > matchCount) {
-        printf("Invalid selection. No deletion performed.\n");
-        return;
-    }
-
-    confirmDelete(contacts, matchIndexes[selection - 1], count);
+    deleteContact(contacts, count); // Recursive call to allow user to try again with a more specific search
 }
 
 // Function to confirm deletion of a contact
