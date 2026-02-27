@@ -44,8 +44,10 @@ void createFileIfNotExists(const char *filename);
 int main() {
     Contact contacts[100]; // Array to hold up to 100 contacts
     int count = 0; // Number of contacts currently in the list
-    int choice;
+    int choice; // User selection for menu
 
+    // Load contacts from file at the start of the program, 
+    // creates file if it does not exist
     loadContactsFromFile(contacts, &count, "contacts.txt");
 
     do {
@@ -57,7 +59,7 @@ int main() {
         printf("5. Exit\n\n");
         printf("Enter your choice: ");
         if (scanf("%d", &choice) != 1) {
-            printf("Invalid choice. Please enter a number.\n");
+            printf("\nInvalid choice. Please enter a number.\n");
             clearInputBuffer();
             continue;
         }
@@ -81,7 +83,7 @@ int main() {
                 saveContactsToFile(contacts, count, "contacts.txt");
                 break;
             default:
-                printf("Invalid choice. Please try again.\n");
+                printf("\nInvalid choice. Please try again.\n");
         }
     } while (choice != 5);
 
@@ -338,7 +340,7 @@ void saveContactsToFile(Contact contacts[], int count, const char *filename) {
     FILE *file = fopen(filename, "w");
     if (file == NULL) {
         printf("Error opening file for writing.\n");
-        return;
+        return; // If file cannot be opened for writing, exit the function. Shouldn't happen, but also shouldn't crash the program if it exits. Just won't save
     }
     for (int i = 0; i < count; i++) {
         fprintf(file, "%s,%s,%s\n", contacts[i].name, contacts[i].phone, contacts[i].email);
@@ -354,8 +356,8 @@ void loadContactsFromFile(Contact contacts[], int *count, const char *filename) 
         createFileIfNotExists(filename);
         file = fopen(filename, "r");
         if (file == NULL) {
-            printf("Error opening file for reading.\n");
-            return;
+            printf("Error creating file.\n");
+            return; // If file creation fails, exit the function. Shouldn't happen, but also shouldn't crash the program if it exits.
         }
     }
     char line[150];
