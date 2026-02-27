@@ -26,11 +26,15 @@ void searchContact(Contact contacts[], int count);
 void toLowerCase(char *str);
 void trimNewline(char *str);
 void printContact(Contact contact);
+void formatPhoneNumber(char *phone);
+void deleteContact(Contact contacts[], int *count);
+void confirmDelete(Contact contacts[], int index, int *count);
 void clearInputBuffer();
 
 // Validation prototypes
-int validatePhoneNumber(const char *phone);
+int validatePhoneNumber(char *phone);
 int validateEmail(const char *email);
+void stripNonDigits(char *phone);
 
 // file operations
 void saveContactsToFile(Contact contacts[], int count, const char *filename);
@@ -45,14 +49,19 @@ int main() {
     loadContactsFromFile(contacts, &count, "contacts.txt");
 
     do {
-        printf("\nContact List Menu:\n");
+        printf("\nContact List Menu:\n\n");
         printf("1. Add New Contact\n");
         printf("2. Display All Contacts\n");
         printf("3. Search for a Contact by Name\n");
-        printf("4. Exit\n");
+        printf("4. Delete a Contact\n");
+        printf("5. Exit\n\n");
         printf("Enter your choice: ");
-        scanf("%d", &choice);
-        getchar(); // Consume newline character
+        if (scanf("%d", &choice) != 1) {
+            printf("Invalid choice. Please enter a number.\n");
+            clearInputBuffer();
+            continue;
+        }
+        clearInputBuffer();
 
         switch (choice) {
             case 1:
@@ -65,13 +74,16 @@ int main() {
                 searchContact(contacts, count);
                 break;
             case 4:
+                deleteContact(contacts, &count);
+                break;
+            case 5:
                 printf("Exiting the program.\n");
                 saveContactsToFile(contacts, count, "contacts.txt");
                 break;
             default:
                 printf("Invalid choice. Please try again.\n");
         }
-    } while (choice != 4);
+    } while (choice != 5);
 
     return 0;
 }
@@ -84,15 +96,37 @@ void addContact(Contact contacts[], int *count) {
     }
     printf("Enter name: ");
     fgets(contacts[*count].name, sizeof(contacts[*count].name), stdin);
+    if (strchr(contacts[*count].name, '\n') == NULL) {
+        clearInputBuffer();
+    }
     trimNewline(contacts[*count].name);
-    printf("Enter phone number: ");
-    fgets(contacts[*count].phone, sizeof(contacts[*count].phone), stdin);
-    trimNewline(contacts[*count].phone);
-    printf("Enter email address: ");
-    fgets(contacts[*count].email, sizeof(contacts[*count].email), stdin);
-    trimNewline(contacts[*count].email);
-    (*count)++;
+    while(1){
+        printf("Enter phone number(10 digits): ");
+        fgets(contacts[*count].phone, sizeof(contacts[*count].phone), stdin);
+        if (strchr(contacts[*count].phone, '\n') == NULL) {
+            clearInputBuffer();
+        }
+        trimNewline(contacts[*count].phone);
+        if (validatePhoneNumber(contacts[*count].phone)) {
+            break;
+        }
+        printf("Invalid phone number format. Please try again.\n");
+    } 
+    formatPhoneNumber(contacts[*count].phone);
+    while(1){
+        printf("Enter email address: ");
+        fgets(contacts[*count].email, sizeof(contacts[*count].email), stdin);
+        if (strchr(contacts[*count].email, '\n') == NULL) {
+            clearInputBuffer();
+        }
+        trimNewline(contacts[*count].email);
+        if (validateEmail(contacts[*count-1].email)) {
+            break;
+        }
+        printf("Invalid email format. Please try again.\n");
+    }
     printf("Contact added successfully.\n");
+    (*count)++;
 }
 
 // Function to display all contacts
@@ -112,6 +146,9 @@ void searchContact(Contact contacts[], int count) {
     char searchName[50];
     printf("Enter name to search: ");
     fgets(searchName, sizeof(searchName), stdin);
+    if (strchr(searchName, '\n') == NULL) {
+        clearInputBuffer();
+    }
     trimNewline(searchName);
     toLowerCase(searchName);
     int found = 0;
@@ -119,7 +156,7 @@ void searchContact(Contact contacts[], int count) {
         char lowerName[50];
         strcpy(lowerName, contacts[i].name);
         toLowerCase(lowerName);
-        if (strcmp(lowerName, searchName) == 0) {
+        if (strstr(lowerName, searchName) != NULL) {
             printContact(contacts[i]);
             found = 1;
             break;
@@ -147,15 +184,153 @@ void trimNewline(char *str) {
 
 // Function to print a contact's details
 void printContact(Contact contact) {
+    printf("\n-------------------------\n");
     printf("Name: %s\n", contact.name);
     printf("Phone: %s\n", contact.phone);
     printf("Email: %s\n", contact.email);
+    printf("-------------------------\n");
+}
+
+// function to format phone number in (xxx) xxx-xxxx format
+void formatPhoneNumber(char *phone) {
+    char formatted[20];
+    int j = 0;
+    for (int i = 0; phone[i] != '\0'; i++) {
+        if (isdigit(phone[i])) {
+            if (j == 0) {
+                formatted[j++] = '(';
+            }
+            formatted[j++] = phone[i];
+            if (j == 4) {
+                formatted[j++] = ')';
+                formatted[j++] = ' ';
+            } else if (j == 9) {
+                formatted[j++] = '-';
+            }
+        }
+    }
+    formatted[j] = '\0';
+    strncpy(phone, formatted, 20);
+}
+
+// Function to delete a contact by name
+void deleteContact(Contact contacts[], int *count) {
+    if (*count == 0) {
+        printf("No contacts to delete.\n");
+        return;
+    }
+
+    char searchName[50];
+    int matchIndexes[100];
+    int matchCount = 0;
+
+    printf("Enter name of contact to delete: ");
+    fgets(searchName, sizeof(searchName), stdin);
+    if (strchr(searchName, '\n') == NULL) {
+        clearInputBuffer();
+    }
+    trimNewline(searchName);
+    toLowerCase(searchName);
+
+    for (int i = 0; i < *count; i++) {
+        char lowerName[50];
+        strcpy(lowerName, contacts[i].name);
+        toLowerCase(lowerName);
+        if (strstr(lowerName, searchName) != NULL) {
+            matchIndexes[matchCount++] = i;
+        }
+    }
+
+    if (matchCount == 0) {
+        printf("Contact not found. No deletion performed.\n");
+        return;
+    }
+
+    if (matchCount == 1) {
+        confirmDelete(contacts, matchIndexes[0], count);
+        return;
+    }
+
+    printf("Multiple contacts found:\n");
+    for (int i = 0; i < matchCount; i++) {
+        printf("%d.\n", i + 1);
+        printContact(contacts[matchIndexes[i]]);
+    }
+
+    char selectionInput[20];
+    int selection = 0;
+    printf("Enter the number of the contact to delete (1-%d): ", matchCount);
+    fgets(selectionInput, sizeof(selectionInput), stdin);
+    if (strchr(selectionInput, '\n') == NULL) {
+        clearInputBuffer();
+    }
+    selection = atoi(selectionInput);
+
+    if (selection < 1 || selection > matchCount) {
+        printf("Invalid selection. No deletion performed.\n");
+        return;
+    }
+
+    confirmDelete(contacts, matchIndexes[selection - 1], count);
+}
+
+// Function to confirm deletion of a contact
+void confirmDelete(Contact contacts[], int index, int *count) {
+    char confirmation[10];
+    printContact(contacts[index]);
+    printf("Are you sure you want to delete this contact? (yes/no): ");
+    fgets(confirmation, sizeof(confirmation), stdin);
+    if (strchr(confirmation, '\n') == NULL) {
+        clearInputBuffer();
+    }
+    trimNewline(confirmation);
+    toLowerCase(confirmation);
+    if (strcmp(confirmation, "yes") == 0 || strcmp(confirmation, "y") == 0) {
+        for (int i = index; i < *count - 1; i++) {
+            contacts[i] = contacts[i + 1]; // Shift contacts to fill the gap
+        }
+        (*count)--;
+        printf("Contact deleted successfully.\n");
+    } else {
+        printf("Deletion cancelled.\n");
+    }
 }
 
 // Function to clear the input buffer
 void clearInputBuffer() {
     int c;
     while ((c = getchar()) != '\n' && c != EOF);
+}
+
+// Function to validate phone number after stripping non-numeric symbols
+int validatePhoneNumber(char *phone) {
+    stripNonDigits(phone);
+    int length = strlen(phone);
+    if (length == 10) {
+        return 1; // Valid phone number
+    }
+    return 0; // Invalid length
+}
+
+// Function to validate email address (simple validation for '@' and '.')
+int validateEmail(const char *email) {
+    const char *at = strchr(email, '@');
+    const char *dot = strrchr(email, '.');
+    if (at == NULL || dot == NULL || at > dot) {
+        return 0; // Invalid email format
+    }
+    return 1; // Valid email address
+}
+
+// Function to keep only numeric characters in a phone number
+void stripNonDigits(char *phone) {
+    int write = 0;
+    for (int read = 0; phone[read] != '\0'; read++) {
+        if (isdigit((unsigned char)phone[read])) {
+            phone[write++] = phone[read];
+        }
+    }
+    phone[write] = '\0';
 }
 
 // Function to save contacts to a file
@@ -219,28 +394,3 @@ void createFileIfNotExists(const char *filename) {
         fclose(file);
     }
 }
-
-// Function to validate phone number (simple validation for digits and length)
-int validatePhoneNumber(const char *phone) {
-    int length = strlen(phone);
-    if (length < 7 || length > 15) {
-        return 0; // Invalid length
-    }
-    for (int i = 0; i < length; i++) {
-        if (!isdigit(phone[i]) && phone[i] != '-' && phone[i] != ' ') {
-            return 0; // Invalid character
-        }
-    }
-    return 1; // Valid phone number
-}
-
-// Function to validate email address (simple validation for '@' and '.')
-int validateEmail(const char *email) {
-    const char *at = strchr(email, '@');
-    const char *dot = strrchr(email, '.');
-    if (at == NULL || dot == NULL || at > dot) {
-        return 0; // Invalid email format
-    }
-    return 1; // Valid email address
-}
-
