@@ -22,6 +22,7 @@ typedef struct {
 // Function prototypes
 void addContact(Contact contacts[], int *count);
 void displayContacts(Contact contacts[], int count);
+void alphabetizeContacts(Contact contacts[], int count);
 void searchContact(Contact contacts[], int count);
 int findMatchingContacts(Contact contacts[], int count, const char *query, int matchIndexes[], int maxMatches);
 void toLowerCase(char *str);
@@ -30,6 +31,9 @@ void printContact(Contact contact);
 void formatPhoneNumber(char *phone);
 void deleteContact(Contact contacts[], int *count);
 void confirmDelete(Contact contacts[], int index, int *count);
+void displayRandomContact(Contact contacts[], int count);
+void deleteAllContacts(Contact contacts[], int *count);
+char* formatName(char *name);
 void clearInputBuffer();
 
 // Validation prototypes
@@ -54,10 +58,12 @@ int main() {
     do {
         printf("\nContact List Menu:\n\n");
         printf("1. Add New Contact\n");
-        printf("2. Display All Contacts\n");
+        printf("2. Display All Contacts(Alphabetically)\n");
         printf("3. Search for a Contact by Name\n");
         printf("4. Delete a Contact\n");
-        printf("5. Exit\n\n");
+        printf("5. Pick a random contact\n");
+        printf("6. Delete All Contacts(Caution: This is permanent)\n");
+        printf("7. Exit\n\n");
         printf("Enter your choice: ");
         if (scanf("%d", &choice) != 1) {
             printf("\nInvalid choice. Please enter a number.\n");
@@ -80,13 +86,19 @@ int main() {
                 deleteContact(contacts, &count);
                 break;
             case 5:
+                displayRandomContact(contacts, count);
+                break;
+            case 6:
+                deleteAllContacts(contacts, &count);
+                break;
+            case 7:
                 printf("Exiting the program.\n");
                 saveContactsToFile(contacts, count, "contacts.txt");
                 break;
             default:
                 printf("\nInvalid choice. Please try again.\n");
         }
-    } while (choice != 5);
+    } while (choice != 7);
 
     return 0;
 }
@@ -103,6 +115,7 @@ void addContact(Contact contacts[], int *count) {
         clearInputBuffer();
     }
     trimNewline(contacts[*count].name);
+    formatName(contacts[*count].name);
     while(1){
         printf("Enter phone number(10 digits): ");
         fgets(contacts[*count].phone, sizeof(contacts[*count].phone), stdin);
@@ -132,12 +145,27 @@ void addContact(Contact contacts[], int *count) {
     (*count)++;
 }
 
+// Function to alphabetize contacts by name using bubble sort
+void alphabetizeContacts(Contact contacts[], int count) {
+    for (int i = 0; i < count - 1; i++) {
+        for (int j = 0; j < count - i - 1; j++) {
+            if (strcmp(contacts[j].name, contacts[j + 1].name) > 0) {
+                Contact temp = contacts[j];
+                contacts[j] = contacts[j + 1];
+                contacts[j + 1] = temp;
+            }
+        }
+    }
+}
+
 // Function to display all contacts
 void displayContacts(Contact contacts[], int count) {
+    alphabetizeContacts(contacts, count);
     if (count == 0) {
         printf("No contacts to display.\n");
         return;
     }
+    alphabetizeContacts(contacts, count);
     printf("\nContact List:\n");
     for (int i = 0; i < count; i++) {
         printContact(contacts[i]);
@@ -166,7 +194,7 @@ void searchContact(Contact contacts[], int count) {
     }
 }  
 
-// Shared helper for case-insensitive name contains matching
+// Search for case-insensitive name contains matching
 int findMatchingContacts(Contact contacts[], int count, const char *query, int matchIndexes[], int maxMatches) {
     char searchName[50];
     strncpy(searchName, query, sizeof(searchName) - 1);
@@ -304,6 +332,37 @@ void clearInputBuffer() {
     while ((c = getchar()) != '\n' && c != EOF);
 }
 
+void deleteAllContacts(Contact contacts[], int *count) {
+    char confirmation[10];
+    printf("Are you sure you want to delete ALL contacts? (yes/no): ");
+    fgets(confirmation, sizeof(confirmation), stdin);
+    if (strchr(confirmation, '\n') == NULL) {
+        clearInputBuffer();
+    }
+    trimNewline(confirmation);
+    toLowerCase(confirmation);
+    if (strcmp(confirmation, "yes") == 0 || strcmp(confirmation, "y") == 0) {
+        // Clear the contacts array and reset count
+        memset(contacts, 0, sizeof(Contact) * 100);
+        *count = 0;
+        printf("All contacts deleted successfully.\n");
+    } else {
+        printf("Deletion cancelled.\n");
+    }
+    saveContactsToFile(contacts, *count, "contacts.txt"); // Save the empty contact list to file
+}   
+
+void displayRandomContact(Contact contacts[], int count) {
+    if (count == 0) {
+        printf("No contacts to display.\n");
+        return;
+    }
+    int randomIndex = rand() % count;
+    printf("Random Contact:\n");
+    printContact(contacts[randomIndex]);
+}
+
+
 // Function to validate phone number after stripping non-numeric symbols
 int validatePhoneNumber(char *phone) {
     stripNonDigits(phone);
@@ -343,7 +402,16 @@ void saveContactsToFile(Contact contacts[], int count, const char *filename) {
         return; // If file cannot be opened for writing, exit the function. Shouldn't happen, but also shouldn't crash the program if it exits. Just won't save
     }
     for (int i = 0; i < count; i++) {
-        fprintf(file, "%s,%s,%s\n", contacts[i].name, contacts[i].phone, contacts[i].email);
+        // Remove commas from the name to prevent issues with CSV format on import.
+        char nameWithoutCommas[sizeof(contacts[i].name)];
+        int write = 0;
+        for (int read = 0; contacts[i].name[read] != '\0' && write < (int)sizeof(nameWithoutCommas) - 1; read++) {
+            if (contacts[i].name[read] != ',') {
+                nameWithoutCommas[write++] = contacts[i].name[read];
+            }
+        }
+        nameWithoutCommas[write] = '\0';
+        fprintf(file, "%s,%s,%s\n", nameWithoutCommas, contacts[i].phone, contacts[i].email);
     }
     fclose(file);
     printf("Contacts saved to file successfully.\n");
@@ -364,17 +432,31 @@ void loadContactsFromFile(Contact contacts[], int *count, const char *filename) 
     while (fgets(line, sizeof(line), file) && *count < 100) {
         trimNewline(line);
         char *token = strtok(line, ",");
+        // 
         if (token != NULL) {
-            strncpy(contacts[*count].name, token, sizeof(contacts[*count].name));
+            char restoredName[sizeof(contacts[*count].name)];
+            char *space = strchr(token, ' ');
+            if (space != NULL) {
+                int lastNameLength = (int)(space - token);
+                snprintf(restoredName, sizeof(restoredName), "%.*s, %s", lastNameLength, token, space + 1);
+                strncpy(contacts[*count].name, restoredName, sizeof(contacts[*count].name) - 1);
+                contacts[*count].name[sizeof(contacts[*count].name) - 1] = '\0';
+            } else {
+                strncpy(contacts[*count].name, token, sizeof(contacts[*count].name) - 1);
+                contacts[*count].name[sizeof(contacts[*count].name) - 1] = '\0';
+            }
         }
         token = strtok(NULL, ",");
         if (token != NULL) {
-            strncpy(contacts[*count].phone, token, sizeof(contacts[*count].phone));
+            strncpy(contacts[*count].phone, token, sizeof(contacts[*count].phone) - 1);
+            contacts[*count].phone[sizeof(contacts[*count].phone) - 1] = '\0';
         }
         token = strtok(NULL, ",");
         if (token != NULL) {
-            strncpy(contacts[*count].email, token, sizeof(contacts[*count].email));
+            strncpy(contacts[*count].email, token, sizeof(contacts[*count].email) - 1);
+            contacts[*count].email[sizeof(contacts[*count].email) - 1] = '\0';
         }
+
         (*count)++;
     }
     fclose(file);
@@ -395,4 +477,15 @@ void createFile(const char *filename) {
     } else {
         fclose(file);
     }
+}
+
+char* formatName(char *name) {
+    char formatted[50];
+    char *lastName = strrchr(name, ' ');
+    if (lastName != NULL) {
+        lastName++; // Move past the space
+        snprintf(formatted, sizeof(formatted), "%s, %.*s", lastName, (int)(lastName - name - 1), name);
+        return strncpy(name, formatted, 50);
+    }
+    return name; // If no space found, return the original name
 }
