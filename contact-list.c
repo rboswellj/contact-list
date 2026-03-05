@@ -236,7 +236,15 @@ void trimNewline(char *str) {
 // Function to print a contact's details
 void printContact(Contact contact) {
     printf("\n-------------------------\n");
-    printf("Name: %s\n", contact.name);
+    char displayName[sizeof(contact.name) + 2];
+    char *space = strchr(contact.name, ' ');
+    if (space != NULL) {
+        int lastNameLength = (int)(space - contact.name);
+        snprintf(displayName, sizeof(displayName), "%.*s, %s", lastNameLength, contact.name, space + 1);
+        printf("Name: %s\n", displayName);
+    } else {
+        printf("Name: %s\n", contact.name);
+    }
     printf("Phone: %s\n", contact.phone);
     printf("Email: %s\n", contact.email);
     printf("-------------------------\n");
@@ -402,16 +410,7 @@ void saveContactsToFile(Contact contacts[], int count, const char *filename) {
         return; // If file cannot be opened for writing, exit the function. Shouldn't happen, but also shouldn't crash the program if it exits. Just won't save
     }
     for (int i = 0; i < count; i++) {
-        // Remove commas from the name to prevent issues with CSV format on import.
-        char nameWithoutCommas[sizeof(contacts[i].name)];
-        int write = 0;
-        for (int read = 0; contacts[i].name[read] != '\0' && write < (int)sizeof(nameWithoutCommas) - 1; read++) {
-            if (contacts[i].name[read] != ',') {
-                nameWithoutCommas[write++] = contacts[i].name[read];
-            }
-        }
-        nameWithoutCommas[write] = '\0';
-        fprintf(file, "%s,%s,%s\n", nameWithoutCommas, contacts[i].phone, contacts[i].email);
+        fprintf(file, "%s,%s,%s\n", contacts[i].name, contacts[i].phone, contacts[i].email);
     }
     fclose(file);
     printf("Contacts saved to file successfully.\n");
@@ -432,19 +431,9 @@ void loadContactsFromFile(Contact contacts[], int *count, const char *filename) 
     while (fgets(line, sizeof(line), file) && *count < 100) {
         trimNewline(line);
         char *token = strtok(line, ",");
-        // 
         if (token != NULL) {
-            char restoredName[sizeof(contacts[*count].name)];
-            char *space = strchr(token, ' ');
-            if (space != NULL) {
-                int lastNameLength = (int)(space - token);
-                snprintf(restoredName, sizeof(restoredName), "%.*s, %s", lastNameLength, token, space + 1);
-                strncpy(contacts[*count].name, restoredName, sizeof(contacts[*count].name) - 1);
-                contacts[*count].name[sizeof(contacts[*count].name) - 1] = '\0';
-            } else {
-                strncpy(contacts[*count].name, token, sizeof(contacts[*count].name) - 1);
-                contacts[*count].name[sizeof(contacts[*count].name) - 1] = '\0';
-            }
+            strncpy(contacts[*count].name, token, sizeof(contacts[*count].name) - 1);
+            contacts[*count].name[sizeof(contacts[*count].name) - 1] = '\0';
         }
         token = strtok(NULL, ",");
         if (token != NULL) {
@@ -484,7 +473,7 @@ char* formatName(char *name) {
     char *lastName = strrchr(name, ' ');
     if (lastName != NULL) {
         lastName++; // Move past the space
-        snprintf(formatted, sizeof(formatted), "%s, %.*s", lastName, (int)(lastName - name - 1), name);
+        snprintf(formatted, sizeof(formatted), "%s %.*s", lastName, (int)(lastName - name - 1), name);
         return strncpy(name, formatted, 50);
     }
     return name; // If no space found, return the original name
